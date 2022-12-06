@@ -7,6 +7,7 @@ import qualified Data.List as L
 import GHC.Base (when)
 import Data.Text as T
 import Data.Char (isDigit, isLetter)
+import Data.Map as M
 
 main :: IO ()
 main = do
@@ -33,7 +34,7 @@ main = do
 
 startGame :: Handle -> IO ()
 startGame hdl = do
-    let word = "BEGIN"  -- TODO: sample random correct word
+    let word = "APPLE"  -- TODO: sample random correct word
     hPutStrLn hdl $ "001 " ++ word ++ " "
     guessRoutine hdl word
 
@@ -43,17 +44,59 @@ readOpponent hdl word = do
     if code == "002"
     then startGame hdl
     else do putStrLnFlush $ "Opponent guessed: " ++ oppWord
+            r <- guessResult oppWord word
+            putStrLnFlush $ "                  " ++ r
             guessRoutine hdl word
 
 guessRoutine :: Handle -> String -> IO ()
 guessRoutine hdl word = do
     outputWord <- getGuess
+    r <- guessResult outputWord word
+    putStrLnFlush $ "       " ++ r
     if outputWord == word
     then do hPutStrLn hdl "002 ***** "
             (_, word) <- readAndParseFlagged hdl
             readOpponent hdl word
     else do hPutStrLn hdl $ "003 " ++ outputWord ++ " "
             readOpponent hdl word
+
+-- generates a result string where each char of the string indicates that
+-- the corresponding guess char at that position is
+-- 'O': in the correct spot
+-- 'X': is not in the word
+-- '%': in the wrong spot
+guessResult :: String -> String -> IO String
+guessResult guess word = do
+    let (r1, misses) = markCorrect guess word "?????"
+    let r2 = markNotInWord guess word r1
+    return $ markWrongSpot guess misses r2
+
+-- replaces chars in result string with 'O' if guess char is in the correct spot
+markCorrect :: String -> String -> String -> (String, Map Char Int)
+markCorrect [] _ _ = ("", M.empty)
+markCorrect (g:gs) (w:ws) (r:rs)
+    | g == w    = ('O':rs', miss)
+    | otherwise = (r:rs', insertWith (+) w 1 miss)
+    where (rs', miss) = markCorrect gs ws rs
+
+-- replaces chars in result string with 'X' if guess char is not in the word
+markNotInWord :: String -> String -> String -> String
+markNotInWord [] _ _ = ""
+markNotInWord (g:gs) word (r:rs)
+    | g `Prelude.elem` word = r:rs'
+    | otherwise             = 'X':rs'
+    where rs' = markNotInWord gs word rs
+
+-- replaces chars in result string with '%' if guess char is in the wrong spot
+-- if there are duplicates of some guess char but only one copy of that char in
+-- the word, only replace the leftmost char with '%' and the rest with 'X'
+markWrongSpot :: String -> Map Char Int -> String -> String
+markWrongSpot [] _ _ = ""
+markWrongSpot (g:gs) miss (r:rs)
+    | (r == 'O') || (r == 'X') = r : markWrongSpot gs miss rs
+    | otherwise                = if findWithDefault 0 g miss > 0
+                                 then "%" ++ markWrongSpot gs (insertWith (+) g (-1) miss) rs
+                                 else "X" ++ markWrongSpot gs miss rs
 
 -- prompts user for guess, repeats if guess is not length 5
 getGuess :: IO String
@@ -68,7 +111,7 @@ getGuess = do
 readAndParseFlagged :: Handle -> IO (String, String)
 readAndParseFlagged hdl = do
     msg <- readBetween hdl "-->" "<--"
-    return (parseCode msg, parseWord msg)    
+    return (parseCode msg, parseWord msg)
 
 -- reads from handle until it receives message between flags
 -- returns message between flags, without flags
