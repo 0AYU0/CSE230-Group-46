@@ -105,6 +105,71 @@ prop_checkMoreWords = forAll (genRandomString r) (\(first, second) -> countNumOv
                         where
                           r = chooseInt(1, 10)
 
+prop_checkMapEntries :: Property
+prop_checkMapEntries = forAll (randomString 8) (\(first, second) -> countNumOverlap first second == 8 - countMap (snd (markCorrect first second (clone 12 "?"))))
+
+prop_checkIndices :: Property
+prop_checkIndices = forAll (genRandomString r) (\(first, second) -> (Prelude.length (countElements first second 0)) >= (Prelude.length (countMatches (markWrongSpot first (snd (markCorrect first second "??????????")) (markNotInWord first second (fst (markCorrect first second "??????????")))) 0)))
+  where
+    r = chooseInt(1,10)
+
+prop_checkIndicesExist :: Property
+prop_checkIndicesExist = forAll (genRandomString r) (\(first, second) -> countIndexExists (countElements first second 0) (countMatches (markWrongSpot first (snd (markCorrect first second "??????????")) (markNotInWord first second (fst (markCorrect first second "??????????")))) 0))
+  where
+    r = chooseInt(1,10)
+
+countIndexExists :: [Int] -> [Int] -> Bool
+countIndexExists _ [] = True
+countIndexExists a (x:xs)
+ | x `Prelude.elem` a = countIndexExists a xs
+ | otherwise = False
+
+countElements :: String -> String -> Int -> [Int]
+countElements [] _ _ = []
+countElements (x:xs) word idx
+  | x `Prelude.elem` word = [idx] ++ (countElements xs word (idx + 1))
+  | otherwise = countElements xs word (idx + 1)
+
+countMatches :: String -> Int -> [Int]
+countMatches [] _ = []
+countMatches (x:xs) idx 
+  | x == 'O' || x == '%' = [idx] ++ countMatches xs (idx + 1)
+  | otherwise = countMatches xs (idx + 1)
+
+
+-- prop_checkNonMatchingIndices :: Property
+-- prop_checkNonMatchingIndices = forAll (randomStringGuess 8) (\(first, second, guess) -> (nonMatchingIndices 0 first second) == (countElementIndices '%' guess 0))
+
+-- nonMatchingIndices :: Int -> String -> String -> [Int]
+-- nonMatchingIndices _ [] [] = []
+-- nonMatchingIndices index (x:xs) (y:ys)
+--  | x /= y = [index] + nonMatchingIndices (index + 1) xs ys
+--  | otherwise = nonMatchingIndices (index + 1) xs ys
+
+-- countElementIndices :: Char -> String -> Int -> [Int]
+-- countElementIndices _ [] i = []
+-- countElementIndices c (x:xs) i
+--   | c == x = [i] + countElementIndices c xs (i + 1)
+--   | otherwise = countElementIndices c xs (i + 1)
+
+randomString :: Int -> Gen (String, String)
+randomString 0 = return ("", "")
+randomString k = do
+      letter <- elements ['a' .. 'z']
+      secondLetter <- elements ['a' .. 'z']
+      (fstWord, sndWord) <- genRandomString (elements [(k - 1)])
+      return ([letter] ++ fstWord, [secondLetter] ++ sndWord)
+
+-- randomStringGuess :: Int -> Gen (String, String, String)
+-- randomStringGuess 0 = return ("", "", "")
+-- randomStringGuess k = do
+--       (fst, snd) <- randomString k
+--       guess <- guessResult fst snd
+--       return (fst, snd, guess)
+
+countMap :: Map Char Int -> Int
+countMap map = sum (elems map)
+
 clone :: Int -> String -> String
 clone 0 _ = ""
 clone num str = str ++ clone (num - 1) str
