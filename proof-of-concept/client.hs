@@ -12,6 +12,8 @@ import System.Random
 
 main :: IO ()
 main = do
+  filecontents <- readFile "official.txt"
+  let dict = Prelude.lines $ applyText T.toUpper filecontents
   -- connect socket
   sock <- socket AF_INET Stream 0
   setSocketOption sock ReuseAddr 1
@@ -31,31 +33,31 @@ main = do
   if code == "000"
     then do
       putStrLnFlush $ word ++ " challenges you to a battle!"
-      startGame hdl
-    else readOpponent hdl word
+      startGame hdl dict
+    else readOpponent hdl word dict
 
-startGame :: Handle -> IO ()
-startGame hdl = do
-  randomWord <- pollRandomWord
+startGame :: Handle -> [String] -> IO ()
+startGame hdl dict = do
+  randomWord <- pollRandomWord dict
   hPutStrLn hdl $ "001 " ++ randomWord ++ " "
-  guessRoutine hdl randomWord
+  guessRoutine hdl randomWord dict
 
-readOpponent :: Handle -> String -> IO ()
-readOpponent hdl word = do
+readOpponent :: Handle -> String -> [String] -> IO ()
+readOpponent hdl word dict = do
   (code, oppWord) <- readAndParseFlagged hdl
   if code == "002"
     then do
       putStrLnFlush "New game starting"
-      startGame hdl
+      startGame hdl dict
     else do
       putStrLnFlush $ "Opponent guessed: " ++ oppWord
       r <- guessResult oppWord word
       putStrLnFlush $ "                  " ++ r
-      guessRoutine hdl word
+      guessRoutine hdl word dict
 
-guessRoutine :: Handle -> String -> IO ()
-guessRoutine hdl word = do
-  outputWord <- getGuess
+guessRoutine :: Handle -> String -> [String] -> IO ()
+guessRoutine hdl word dict = do
+  outputWord <- getGuess dict
   r <- guessResult outputWord word
   putStrLnFlush $ "       " ++ r
   if outputWord == word
@@ -64,10 +66,10 @@ guessRoutine hdl word = do
       putStrLnFlush "New game starting!  Your opponent will start first"
       hPutStrLn hdl "002 ***** "
       (_, word) <- readAndParseFlagged hdl
-      readOpponent hdl word
+      readOpponent hdl word dict
     else do
       hPutStrLn hdl $ "003 " ++ outputWord ++ " "
-      readOpponent hdl word
+      readOpponent hdl word dict
 
 -- generates a result string where each char of the string indicates that
 -- the corresponding guess char at that position is
@@ -111,15 +113,20 @@ markWrongSpot (g : gs) miss (r : rs)
         else "X" ++ markWrongSpot gs miss rs
 
 -- prompts user for guess, repeats if guess is not length 5
-getGuess :: IO String
-getGuess = do
+getGuess :: [String] -> IO String
+getGuess dict = do
   putStrFlush "guess: "
-  guess <- getLine
+  g <- getLine
+  let guess = applyText T.toUpper g
   if Prelude.length guess == 5
-    then return $ applyText T.toUpper guess
-    else do
-      putStrLnFlush "Guess must be 5 letters long!"
-      getGuess
+  then if guess `Prelude.elem` dict
+         then return $ applyText T.toUpper guess
+         else do
+           putStrLnFlush "Guess is not a valid word!"
+           getGuess dict
+  else do
+    putStrLnFlush "Guess must be 5 letters long!"
+    getGuess dict
 
 -- reads message between flags, parses code and word
 readAndParseFlagged :: Handle -> IO (String, String)
@@ -164,10 +171,8 @@ putStrLnFlush str = do
   putStrLn str
   hFlush stdout
 
-pollRandomWord :: IO String
-pollRandomWord = do
-  filecontents <- readFile "official.txt"
-  let words = Prelude.lines filecontents
+pollRandomWord :: [String] -> IO String
+pollRandomWord dict = do
   gen <- initStdGen
-  let (idx, _) = uniformR (0 :: Int, Prelude.length words - 1 :: Int) gen
-  return $ applyText T.toUpper (words !! idx)
+  let (idx, _) = uniformR (0 :: Int, Prelude.length dict - 1 :: Int) gen
+  return $ applyText T.toUpper (dict !! idx)
