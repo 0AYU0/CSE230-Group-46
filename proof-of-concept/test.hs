@@ -36,7 +36,7 @@ runConn (sock, _) chan msgNum = do
   hdl <- socketToHandle sock ReadWriteMode -- handle = operations to read and write from files
   hSetBuffering hdl NoBuffering -- buffering disabled on handle if possible
   hPutStrLn hdl "Input Username"
-  name <- fmap init (hGetLine hdl)
+  name <- hGetLine hdl
   broadcast ("--> 000 " ++ name ++ " entered game.<--")
   hPutStrLn hdl ("Welcome, " ++ name ++ "!")
 
@@ -49,7 +49,7 @@ runConn (sock, _) chan msgNum = do
     loop
 
   handle (\(SomeException _) -> return ()) $ fix $ \loop -> do
-    line <- fmap init (hGetLine hdl)
+    line <- hGetLine hdl
     case line of
       -- If an exception is caught, send a message and break the loop
       "quit" -> hPutStrLn hdl "Bye!"
