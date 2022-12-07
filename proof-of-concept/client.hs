@@ -1,13 +1,14 @@
 module Main where
 
 import Control.Monad (forever)
-import Data.Char (isDigit, isLetter)
+import Data.Char (isDigit, isLetter, toUpper)
 import Data.List qualified as L
 import Data.Map as M
 import Data.Text as T
 import GHC.Base (when)
 import Network.Socket
 import System.IO
+import System.Random
 
 main :: IO ()
 main = do
@@ -35,10 +36,9 @@ main = do
 
 startGame :: Handle -> IO ()
 startGame hdl = do
-  let word = "APPLE" -- TODO: sample random correct word
   randomWord <- pollRandomWord
   hPutStrLn hdl $ "001 " ++ randomWord ++ " "
-  guessRoutine hdl word
+  guessRoutine hdl randomWord
 
 readOpponent :: Handle -> String -> IO ()
 readOpponent hdl word = do
@@ -116,7 +116,7 @@ getGuess = do
   putStrFlush "guess: "
   guess <- getLine
   if Prelude.length guess == 5
-    then return $ applyText toUpper guess
+    then return $ applyText T.toUpper guess
     else do
       putStrLnFlush "Guess must be 5 letters long!"
       getGuess
@@ -168,4 +168,6 @@ pollRandomWord :: IO String
 pollRandomWord = do
   filecontents <- readFile "official.txt"
   let words = Prelude.lines filecontents
-  return (words !! 1) -- Need to get random index
+  gen <- initStdGen
+  let (idx, _) = uniformR (0 :: Int, Prelude.length words - 1 :: Int) gen
+  return $ applyText T.toUpper (words !! idx)
