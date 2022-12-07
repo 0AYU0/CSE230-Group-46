@@ -1,5 +1,5 @@
 -- Main.hs, run with ghc test.hs -e main
-module Main where
+module Server where
 
 import Control.Concurrent
 import Control.Exception
