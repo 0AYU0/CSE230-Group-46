@@ -14,6 +14,9 @@ import System.IO
 import System.Random
 import Brick
 import Brick.BChan
+import Brick.Widgets.Border
+import Brick.Widgets.Center (center, hCenter)
+import Brick.Widgets.Border.Style (unicode)
 import qualified Graphics.Vty as V
 import Lens.Micro.TH
 import Lens.Micro.Mtl
@@ -41,11 +44,31 @@ niceErrorMsg :: String
 niceErrorMsg = "game disconnected"
 
 drawUI :: GlobalState -> [Widget ()]
-drawUI st = [ui]
+drawUI st = [gameUI]
+  where
+    lines = [""]
+    widgs = map str lines
+    gameUI = foldl (<=>) (ui st) widgs
+
+ui :: GlobalState -> Widget ()
+ui st =
+  joinBorders $
+    withBorderStyle unicode $
+      borderWithLabel (str "Welcome to Squabble!") $
+        (padRight Max (unpackageDialogue st) <+> vBorder <+> padRight Max (openingMessage))
+
+unpackageDialogue :: GlobalState -> Widget ()
+unpackageDialogue st = linesUI
   where
     lines = _stLines st
-    widgs = map str lines
-    ui = foldl (<=>) (str "") widgs
+    widgs = map str (lines)
+    linesUI = foldl (<=>) (str "") widgs
+
+openingMessage :: Widget ()
+openingMessage = foldl (<=>) (str "") widgs
+  where
+    lines = ["Welcome to Squabble!", "Pres Esc to leave or wait for a challenger!", "Pick the correct 5 letter word to win!", "\n", "\n", "\n"]
+    widgs = map str (lines)
 
 appEvent :: BrickEvent () MessageEvent -> EventM () GlobalState ()
 appEvent e = do
@@ -53,6 +76,7 @@ appEvent e = do
     let hdl = (_stHandle st)
     let dict = (_stDict st)
     case e of
+        VtyEvent (V.EvKey (V.KChar 'c') [V.MCtrl]) -> halt
         VtyEvent (V.EvKey V.KEsc []) -> halt
         VtyEvent (V.EvKey V.KBS []) -> do stLines %= deleteStrEnd
                                           stInput %= backspace
