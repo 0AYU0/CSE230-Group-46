@@ -9,6 +9,16 @@ import GHC.Base (when)
 import Network.Socket
 import System.IO
 import System.Random
+import Test.QuickCheck
+  ( Gen,
+    Property,
+    choose,
+    chooseInt,
+    elements,
+    forAll,
+    frequency,
+    listOf,
+  )
 
 main :: IO ()
 main = do
@@ -81,6 +91,47 @@ guessResult guess word = do
   let (r1, misses) = markCorrect guess word "?????"
   let r2 = markNotInWord guess word r1
   return $ markWrongSpot guess misses r2
+
+prop_checkWordLetters :: Property
+prop_checkWordLetters = forAll (genRandomString r) (\(first, second) -> countNumOverlap first second == countNumO (fst (markCorrect first second "?????")))
+                          where
+                            r = chooseInt(5,5)
+-- Can randomize 5 to be some other letter
+-- Check the map, ensure that the sum of entries is number of non-matching characters
+-- If in the map, it's not in the second string
+-- Ensure that guessResult has equivalent matches
+prop_checkMoreWords :: Property
+prop_checkMoreWords = forAll (genRandomString r) (\(first, second) -> countNumOverlap first second == countNumO (fst (markCorrect first second (clone 12 "?"))))
+                        where
+                          r = chooseInt(1, 10)
+
+clone :: Int -> String -> String
+clone 0 _ = ""
+clone num str = str ++ clone (num - 1) str
+
+countNumO :: String -> Int
+countNumO "" = 0
+countNumO (x : xs)
+  | x == 'O' = 1 + countNumO xs
+  | otherwise = countNumO xs
+
+countNumOverlap :: String -> String -> Int
+countNumOverlap "" "" = 0
+countNumOverlap (x : xs) (y : ys)
+  | x == y = 1 + countNumOverlap xs ys
+  | otherwise = countNumOverlap xs ys
+
+genRandomString :: Gen Int -> Gen (String, String)
+genRandomString k = do
+  num <- k
+  if num == 0
+    then return ("", "")
+    else do
+      letter <- elements ['a' .. 'z']
+      secondLetter <- elements ['a' .. 'z']
+      (fstWord, sndWord) <- genRandomString (elements [(num - 1)])
+      return ([letter] ++ fstWord, [secondLetter] ++ sndWord)
+
 
 -- replaces chars in result string with 'O' if guess char is in the correct spot
 markCorrect :: String -> String -> String -> (String, Map Char Int)

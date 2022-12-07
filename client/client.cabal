@@ -23,7 +23,7 @@ Library
                        text,
                        network,
                        brick,
-                       random == 1.2.1
+                       random
   hs-source-dirs:      app
   default-language:    Haskell2010
 
