@@ -22,7 +22,8 @@ Library
                        mtl,
                        text,
                        network,
-                       brick
+                       brick,
+                       random
   hs-source-dirs:      app
   default-language:    Haskell2010
 

@@ -132,12 +132,6 @@ putStrTUI msg = stLines %= putStrEnd msg
 putStrLnTUI :: String -> EventM () GlobalState ()
 putStrLnTUI msg = stLines %= (++ [msg, ""])
 
--- appStart :: EventM () GlobalState ()
--- appStart = do
---   st <- get
---   msg <- liftIO $ hGetLine (_stHandle st)
---   stLines %= (++ [msg ++ "\n"])
-
 theApp :: App GlobalState MessageEvent ()
 theApp =
     App { appDraw = drawUI
@@ -215,6 +209,112 @@ guessResult guess word = do
   let (r1, misses) = markCorrect guess word "?????"
   let r2 = markNotInWord guess word r1
   return $ markWrongSpot guess misses r2
+
+prop_checkWordLetters :: Property
+prop_checkWordLetters = forAll (genRandomString r) (\(first, second) -> countNumOverlap first second == countNumO (fst (markCorrect first second "?????")))
+                          where
+                            r = chooseInt(5,5)
+-- Can randomize 5 to be some other letter
+-- Check the map, ensure that the sum of entries is number of non-matching characters
+-- If in the map, it's not in the second string
+-- Ensure that guessResult has equivalent matches
+prop_checkMoreWords :: Property
+prop_checkMoreWords = forAll (genRandomString r) (\(first, second) -> countNumOverlap first second == countNumO (fst (markCorrect first second (clone 12 "?"))))
+                        where
+                          r = chooseInt(1, 10)
+
+prop_checkMapEntries :: Property
+prop_checkMapEntries = forAll (randomString 8) (\(first, second) -> countNumOverlap first second == 8 - countMap (snd (markCorrect first second (clone 12 "?"))))
+
+prop_checkIndices :: Property
+prop_checkIndices = forAll (genRandomString r) (\(first, second) -> (Prelude.length (countElements first second 0)) >= (Prelude.length (countMatches (markWrongSpot first (snd (markCorrect first second "??????????")) (markNotInWord first second (fst (markCorrect first second "??????????")))) 0)))
+  where
+    r = chooseInt(1,10)
+
+prop_checkIndicesExist :: Property
+prop_checkIndicesExist = forAll (genRandomString r) (\(first, second) -> countIndexExists (countElements first second 0) (countMatches (markWrongSpot first (snd (markCorrect first second "??????????")) (markNotInWord first second (fst (markCorrect first second "??????????")))) 0))
+  where
+    r = chooseInt(1,10)
+
+countIndexExists :: [Int] -> [Int] -> Bool
+countIndexExists _ [] = True
+countIndexExists a (x:xs)
+ | x `Prelude.elem` a = countIndexExists a xs
+ | otherwise = False
+
+countElements :: String -> String -> Int -> [Int]
+countElements [] _ _ = []
+countElements (x:xs) word idx
+  | x `Prelude.elem` word = [idx] ++ (countElements xs word (idx + 1))
+  | otherwise = countElements xs word (idx + 1)
+
+countMatches :: String -> Int -> [Int]
+countMatches [] _ = []
+countMatches (x:xs) idx 
+  | x == 'O' || x == '%' = [idx] ++ countMatches xs (idx + 1)
+  | otherwise = countMatches xs (idx + 1)
+
+
+-- prop_checkNonMatchingIndices :: Property
+-- prop_checkNonMatchingIndices = forAll (randomStringGuess 8) (\(first, second, guess) -> (nonMatchingIndices 0 first second) == (countElementIndices '%' guess 0))
+
+-- nonMatchingIndices :: Int -> String -> String -> [Int]
+-- nonMatchingIndices _ [] [] = []
+-- nonMatchingIndices index (x:xs) (y:ys)
+--  | x /= y = [index] + nonMatchingIndices (index + 1) xs ys
+--  | otherwise = nonMatchingIndices (index + 1) xs ys
+
+-- countElementIndices :: Char -> String -> Int -> [Int]
+-- countElementIndices _ [] i = []
+-- countElementIndices c (x:xs) i
+--   | c == x = [i] + countElementIndices c xs (i + 1)
+--   | otherwise = countElementIndices c xs (i + 1)
+
+randomString :: Int -> Gen (String, String)
+randomString 0 = return ("", "")
+randomString k = do
+      letter <- elements ['a' .. 'z']
+      secondLetter <- elements ['a' .. 'z']
+      (fstWord, sndWord) <- genRandomString (elements [(k - 1)])
+      return ([letter] ++ fstWord, [secondLetter] ++ sndWord)
+
+-- randomStringGuess :: Int -> Gen (String, String, String)
+-- randomStringGuess 0 = return ("", "", "")
+-- randomStringGuess k = do
+--       (fst, snd) <- randomString k
+--       guess <- guessResult fst snd
+--       return (fst, snd, guess)
+
+countMap :: Map Char Int -> Int
+countMap map = sum (elems map)
+
+clone :: Int -> String -> String
+clone 0 _ = ""
+clone num str = str ++ clone (num - 1) str
+
+countNumO :: String -> Int
+countNumO "" = 0
+countNumO (x : xs)
+  | x == 'O' = 1 + countNumO xs
+  | otherwise = countNumO xs
+
+countNumOverlap :: String -> String -> Int
+countNumOverlap "" "" = 0
+countNumOverlap (x : xs) (y : ys)
+  | x == y = 1 + countNumOverlap xs ys
+  | otherwise = countNumOverlap xs ys
+
+genRandomString :: Gen Int -> Gen (String, String)
+genRandomString k = do
+  num <- k
+  if num == 0
+    then return ("", "")
+    else do
+      letter <- elements ['a' .. 'z']
+      secondLetter <- elements ['a' .. 'z']
+      (fstWord, sndWord) <- genRandomString (elements [(num - 1)])
+      return ([letter] ++ fstWord, [secondLetter] ++ sndWord)
+
 
 -- replaces chars in result string with 'O' if guess char is in the correct spot
 markCorrect :: String -> String -> String -> (String, M.Map Char Int)
@@ -308,14 +408,6 @@ putStrLnFlush :: String -> IO ()
 putStrLnFlush str = do
   putStrLn str
   hFlush stdout
-
--- putStrTUI :: String -> GlobalState -> EventM () GlobalState ()
--- putStrTUI str st = stLines .= (init lines) ++ (last lines ++ str)
---   where
---     lines = _stLines st
-
--- putStrLnTUI :: String -> GlobalState -> EventM () GlobalState ()
--- putStrLnTUI str _ = stLines %= (++ [str])
 
 pollRandomWord :: [String] -> IO String
 pollRandomWord dict = do
