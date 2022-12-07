@@ -21,7 +21,8 @@ Library
                        QuickCheck,
                        mtl,
                        text,
-                       network
+                       network,
+                       brick
   hs-source-dirs:      app
   default-language:    Haskell2010
 
